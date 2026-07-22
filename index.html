@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --paper: #EEF1EF; --ink: #1C2B2B; --line: #D8D2C4;
+    --teal: #3B6E71; --tealDark: #325E60; --ochre: #B5652D; --muted: #7C8B85;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); font-family:'Inter',sans-serif; }
+  .display { font-family:'Fraunces',serif; }
+  .mono { font-family:'IBM Plex Mono',monospace; font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 520px; margin: 0 auto; padding: 40px 20px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:16px; }
+  input, button { font-family:inherit; font-size: 14px; }
+  input[type=text], input[type=email], input[type=number] {
+    width:100%; border:1px solid var(--line); border-radius:8px; padding:10px 12px; outline:none;
+  }
+  input:focus { box-shadow: 0 0 0 2px var(--teal); border-color: var(--teal); }
+  button { cursor:pointer; border:none; }
+  .btn-primary { background:var(--ink); color:#fff; border-radius:10px; padding:11px; font-weight:500; }
+  .btn-primary:hover { background:#0F1919; }
+  .btn-teal { background:var(--teal); color:#fff; border-radius:8px; padding:8px 14px; }
+  .btn-teal:hover { background:var(--tealDark); }
+  .toggle { flex:1; padding:9px; background:#fff; border:1px solid var(--line); }
+  .toggle.active-a { background:var(--teal); color:#fff; }
+  .toggle.active-b { background:var(--ochre); color:#fff; }
+  .row { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line); }
+  .row:last-child { border-bottom:none; }
+  .dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .muted { color:var(--muted); }
+  .hidden { display:none !important; }
+  #scale { transition: transform .5s; display:inline-block; }
+  a.link { color: var(--teal); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- LOGIN VIEW -->
+  <div id="loginView" class="card" style="padding:32px 24px; margin-top:80px; text-align:center;">
+    <p class="display" style="font-size:22px; font-weight:600; margin:0 0 6px;">The Ledger</p>
+    <p class="muted" style="font-size:13px; margin:0 0 20px;">Sign in with your email to open the shared ledger.</p>
+    <input id="emailInput" type="email" placeholder="you@example.com" style="margin-bottom:10px;" />
+    <button class="btn-primary" style="width:100%;" onclick="sendMagicLink()">Send magic link</button>
+    <p id="loginMsg" class="muted mono" style="font-size:12px; margin-top:12px;"></p>
+  </div>
+
+  <!-- APP VIEW -->
+  <div id="appView" class="hidden">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:28px;">
+      <div>
+        <p class="muted mono" style="font-size:11px; letter-spacing:.15em; text-transform:uppercase; margin:0 0 4px;">The Ledger</p>
+        <h1 class="display" id="titleNames" style="font-size:28px; font-weight:600; margin:0;">Person A &amp; Person B</h1>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button onclick="toggleSettings()" title="Edit names & split" style="border:1px solid var(--line); border-radius:999px; padding:8px 10px; background:#fff;">✎</button>
+        <button onclick="signOut()" title="Sign out" style="border:1px solid var(--line); border-radius:999px; padding:8px 10px; background:#fff; font-size:12px;">exit</button>
+      </div>
+    </div>
+
+    <div class="card" style="padding:26px; text-align:center; margin-bottom:28px;">
+      <div id="scale" style="font-size:32px;">⚖️</div>
+      <p class="display" id="balanceText" style="font-size:20px; font-weight:600; margin:10px 0 4px;">Settled up</p>
+      <p class="mono muted" id="balanceSub" style="font-size:12px; margin:0;"></p>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="settingsPanel" class="card hidden" style="padding:20px; margin-bottom:28px;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div>
+          <label class="muted mono" style="font-size:11px; text-transform:uppercase;">Name A</label>
+          <input id="nameAInput" type="text" />
+        </div>
+        <div>
+          <label class="muted mono" style="font-size:11px; text-transform:uppercase;">Name B</label>
+          <input id="nameBInput" type="text" />
+        </div>
+      </div>
+      <label class="muted mono" style="font-size:11px; text-transform:uppercase; display:flex; justify-content:space-between;">
+        <span>Default split</span><span id="splitLabel" class="mono">60/40</span>
+      </label>
+      <input id="splitRange" type="range" min="0" max="100" value="60" style="width:100%;" oninput="updateSplitLabel()" />
+      <div style="text-align:right; margin-top:14px;">
+        <button class="btn-teal" onclick="saveSettings()">Save</button>
+      </div>
+    </div>
+
+    <!-- ADD EXPENSE -->
+    <div class="card" style="padding:20px; margin-bottom:28px;">
+      <h2 class="display" style="font-size:17px; font-weight:600; margin:0 0 14px;">Add an expense</h2>
+      <input id="descInput" type="text" placeholder="What was it for?" style="margin-bottom:10px;" />
+      <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <input id="amountInput" type="number" step="0.01" placeholder="0.00" style="width:100px;" class="mono" />
+        <div style="flex:1; display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden;">
+          <button id="paidAbtn" class="toggle active-a" onclick="setPaidBy('A')">Person A paid</button>
+          <button id="paidBbtn" class="toggle" onclick="setPaidBy('B')">Person B paid</button>
+        </div>
+      </div>
+      <p id="customSplitToggle" class="muted" style="font-size:12px; cursor:pointer; text-decoration:underline;" onclick="showCustomSplit()">Adjust split for this expense</p>
+      <div id="customSplitPanel" class="hidden" style="background:var(--paper); border-radius:8px; padding:10px; margin-bottom:10px;">
+        <label class="muted mono" style="font-size:11px; display:flex; justify-content:space-between;">
+          <span>This expense's split</span><span id="expenseSplitLabel" class="mono">60/40</span>
+        </label>
+        <input id="expenseSplitRange" type="range" min="0" max="100" value="60" style="width:100%;" oninput="updateExpenseSplitLabel()" />
+      </div>
+      <p id="formError" class="mono" style="font-size:12px; color:var(--ochre);"></p>
+      <button class="btn-primary" style="width:100%;" onclick="addExpense()">+ Add expense</button>
+    </div>
+
+    <!-- HISTORY -->
+    <h2 class="display" style="font-size:17px; font-weight:600; margin:0 0 12px;">History</h2>
+    <div id="emptyState" class="muted" style="font-style:italic; font-size:14px;">Nothing logged yet.</div>
+    <div id="expenseList" class="card hidden"></div>
+
+    <p class="mono muted" style="text-align:center; font-size:10px; margin-top:32px;">shared ledger &middot; visible only to allowed members</p>
+  </div>
+</div>
+
+<script>
+// ====== CONFIGURE THESE TWO VALUES (see README) ======
+const SUPABASE_URL = "https://mlepcdqwhflaciryhilj.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_AQ8yW9UaIOAFlHCZZ30yCg_ehvDiZKp";
+// =======================================================
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let settings = { name_a: "Person A", name_b: "Person B", split_a: 60 };
+let expenses = [];
+let paidBy = "A";
+let customSplit = false;
+
+function fmt(n) {
+  return Number(n).toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
+
+// ---------- AUTH ----------
+async function sendMagicLink() {
+  const email = document.getElementById("emailInput").value.trim();
+  const msg = document.getElementById("loginMsg");
+  if (!email) { msg.textContent = "Enter an email first."; return; }
+  msg.textContent = "Sending…";
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+  msg.textContent = error ? "Error: " + error.message : "Check your email for the sign-in link.";
+}
+
+async function signOut() {
+  await sb.auth.signOut();
+  location.reload();
+}
+
+sb.auth.onAuthStateChange((event, session) => {
+  if (session) { showApp(); loadData(); }
+  else { document.getElementById("loginView").classList.remove("hidden"); document.getElementById("appView").classList.add("hidden"); }
+});
+
+function showApp() {
+  document.getElementById("loginView").classList.add("hidden");
+  document.getElementById("appView").classList.remove("hidden");
+}
+
+// ---------- DATA ----------
+async function loadData() {
+  const { data: s, error: sErr } = await sb.from("settings").select("*").eq("id", 1).single();
+  if (sErr) { console.error(sErr); alert("Couldn't load settings — you may not be on the allowed members list yet."); return; }
+  settings = s;
+  document.getElementById("nameAInput").value = settings.name_a;
+  document.getElementById("nameBInput").value = settings.name_b;
+  document.getElementById("splitRange").value = settings.split_a;
+  updateSplitLabel();
+  document.getElementById("expenseSplitRange").value = settings.split_a;
+  updateExpenseSplitLabel();
+  document.getElementById("titleNames").textContent = `${settings.name_a} & ${settings.name_b}`;
+  document.getElementById("paidAbtn").textContent = `${settings.name_a} paid`;
+  document.getElementById("paidBbtn").textContent = `${settings.name_b} paid`;
+
+  const { data: exp, error: eErr } = await sb.from("expenses").select("*").order("created_at", { ascending: false });
+  if (eErr) { console.error(eErr); return; }
+  expenses = exp;
+  render();
+}
+
+async function saveSettings() {
+  const name_a = document.getElementById("nameAInput").value.trim() || "Person A";
+  const name_b = document.getElementById("nameBInput").value.trim() || "Person B";
+  const split_a = Number(document.getElementById("splitRange").value);
+  const { error } = await sb.from("settings").update({ name_a, name_b, split_a }).eq("id", 1);
+  if (error) { alert("Couldn't save: " + error.message); return; }
+  settings = { ...settings, name_a, name_b, split_a };
+  document.getElementById("titleNames").textContent = `${name_a} & ${name_b}`;
+  document.getElementById("paidAbtn").textContent = `${name_a} paid`;
+  document.getElementById("paidBbtn").textContent = `${name_b} paid`;
+  toggleSettings();
+  render();
+}
+
+async function addExpense() {
+  const description = document.getElementById("descInput").value.trim();
+  const amount = parseFloat(document.getElementById("amountInput").value);
+  const errEl = document.getElementById("formError");
+  if (!description || !amount || amount <= 0) { errEl.textContent = "Add a description and an amount above zero."; return; }
+  errEl.textContent = "";
+  const split_a = customSplit ? Number(document.getElementById("expenseSplitRange").value) : settings.split_a;
+  const { error } = await sb.from("expenses").insert({ description, amount, paid_by: paidBy, split_a });
+  if (error) { errEl.textContent = "Couldn't save: " + error.message; return; }
+  document.getElementById("descInput").value = "";
+  document.getElementById("amountInput").value = "";
+  customSplit = false;
+  document.getElementById("customSplitPanel").classList.add("hidden");
+  document.getElementById("customSplitToggle").classList.remove("hidden");
+  loadData();
+}
+
+async function deleteExpense(id) {
+  const { error } = await sb.from("expenses").delete().eq("id", id);
+  if (error) { alert("Couldn't delete: " + error.message); return; }
+  loadData();
+}
+
+// ---------- UI HELPERS ----------
+function toggleSettings() { document.getElementById("settingsPanel").classList.toggle("hidden"); }
+function setPaidBy(who) {
+  paidBy = who;
+  document.getElementById("paidAbtn").classList.toggle("active-a", who === "A");
+  document.getElementById("paidBbtn").classList.toggle("active-b", who === "B");
+}
+function showCustomSplit() {
+  customSplit = true;
+  document.getElementById("customSplitPanel").classList.remove("hidden");
+  document.getElementById("customSplitToggle").classList.add("hidden");
+}
+function updateSplitLabel() {
+  const v = document.getElementById("splitRange").value;
+  document.getElementById("splitLabel").textContent = `${v}/${100 - v}`;
+}
+function updateExpenseSplitLabel() {
+  const v = document.getElementById("expenseSplitRange").value;
+  document.getElementById("expenseSplitLabel").textContent = `${v}/${100 - v}`;
+}
+
+function render() {
+  let net = 0, total = 0;
+  for (const e of expenses) {
+    const shareA = (e.amount * e.split_a) / 100;
+    const shareB = e.amount - shareA;
+    if (e.paid_by === "A") net += shareB; else net -= shareA;
+    total += Number(e.amount);
+  }
+  const balanceText = document.getElementById("balanceText");
+  if (Math.abs(net) < 0.005) balanceText.textContent = "Settled up";
+  else if (net > 0) balanceText.textContent = `${settings.name_b} owes ${settings.name_a} ${fmt(net)}`;
+  else balanceText.textContent = `${settings.name_a} owes ${settings.name_b} ${fmt(-net)}`;
+  document.getElementById("balanceSub").textContent = `${fmt(total)} tracked · default split ${settings.split_a}/${100 - settings.split_a}`;
+  const tilt = total === 0 ? 0 : Math.max(-14, Math.min(14, (net / (total || 1)) * 40));
+  document.getElementById("scale").style.transform = `rotate(${tilt}deg)`;
+
+  const list = document.getElementById("expenseList");
+  const empty = document.getElementById("emptyState");
+  if (expenses.length === 0) { empty.classList.remove("hidden"); list.classList.add("hidden"); return; }
+  empty.classList.add("hidden"); list.classList.remove("hidden");
+  list.innerHTML = expenses.map(e => {
+    const shareA = (e.amount * e.split_a) / 100;
+    const shareB = e.amount - shareA;
+    const isDefault = e.split_a === settings.split_a;
+    const color = e.paid_by === "A" ? "var(--teal)" : "var(--ochre)";
+    const payer = e.paid_by === "A" ? settings.name_a : settings.name_b;
+    return `<div class="row">
+      <div class="dot" style="background:${color}"></div>
+      <div style="flex:1; min-width:0;">
+        <p style="margin:0; font-size:14px; font-weight:500;">${escapeHtml(e.description)}</p>
+        <p class="mono muted" style="margin:0; font-size:11px;">${payer} paid · ${isDefault ? "default split" : e.split_a + "/" + (100 - e.split_a)}</p>
+      </div>
+      <div style="text-align:right;">
+        <p class="mono" style="margin:0; font-size:14px; font-weight:600;">${fmt(e.amount)}</p>
+        <p class="mono muted" style="margin:0; font-size:10px;">${fmt(shareA)} / ${fmt(shareB)}</p>
+      </div>
+      <button onclick="deleteExpense('${e.id}')" style="background:none; color:var(--ochre); font-size:13px;">✕</button>
+    </div>`;
+  }).join("");
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+</script>
+</body>
+</html>
