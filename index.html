@@ -105,14 +105,10 @@
         </div>
       </div>
       <select id="categorySelect" style="width:100%; margin-bottom:10px; border:1px solid var(--line); border-radius:8px; padding:10px 12px; background:#fff;">
-        <option value="Rent">Rent</option>
-        <option value="Utilities">Utilities</option>
+        <option value="Rent">Rent/Utilities</option>
         <option value="Groceries">Groceries</option>
-        <option value="Dining">Dining</option>
-        <option value="Transport">Transport</option>
-        <option value="Household">Household</option>
-        <option value="Entertainment">Entertainment</option>
-        <option value="Other" selected>Other</option>
+        <option value="House Items">House Items</option>
+        <option value="Other (non-house)" selected>Other (non-house)</option>
       </select>
       <p id="customSplitToggle" class="muted" style="font-size:12px; cursor:pointer; text-decoration:underline;" onclick="showCustomSplit()">Adjust split for this expense</p>
       <div id="customSplitPanel" class="hidden" style="background:var(--paper); border-radius:8px; padding:10px; margin-bottom:10px;">
@@ -151,9 +147,7 @@ let paidBy = "A";
 let customSplit = false;
 
 const CATEGORY_COLORS = {
-  Rent: "#3B6E71", Utilities: "#5B8A8D", Groceries: "#7A9E5E",
-  Dining: "#B5652D", Transport: "#8C6A9C", Household: "#B58A2D",
-  Entertainment: "#C44E5E", Other: "#7C8B85"
+  'Rent/Utilities': "#8C6A9C", 'House Items': "#5B8A8D", Groceries: "#7A9E5E", 'Other (non-house)': "#7C8B85"
 };
 
 function fmt(n) {
