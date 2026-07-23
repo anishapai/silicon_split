@@ -29,8 +29,22 @@ create table if not exists expenses (
   amount numeric not null check (amount > 0),
   paid_by text not null check (paid_by in ('A', 'B')),
   split_a int not null check (split_a between 0 and 100),
+  category text not null default 'Other' check (category in (
+    'Rent', 'Utilities', 'Groceries', 'Dining', 'Transport',
+    'Household', 'Entertainment', 'Other'
+  )),
   created_at timestamptz not null default now()
 );
+
+-- If you already ran this file once before adding categories, run this
+-- instead of the create table above (adding a column doesn't require
+-- dropping existing data):
+--
+-- alter table expenses add column if not exists category text not null
+--   default 'Other' check (category in (
+--     'Rent', 'Utilities', 'Groceries', 'Dining', 'Transport',
+--     'Household', 'Entertainment', 'Other'
+--   ));
 
 -- 4. Lock everything down: only the two allowed emails can read or write.
 alter table allowed_members enable row level security;
@@ -54,5 +68,16 @@ create policy "members only - expenses all" on expenses
     exists (select 1 from allowed_members where email = auth.jwt() ->> 'email')
   );
 
--- allowed_members itself: no client access needed, so no select policy —
--- it's only ever read by the policies above (which run as the database, not the client).
+-- allowed_members: users need to be able to check their OWN row (not browse
+-- the whole table) — without this, the policies above fail with
+-- "permission denied for table allowed_members".
+grant select on allowed_members to authenticated;
+
+create policy "read own membership row" on allowed_members
+  for select using (email = auth.jwt() ->> 'email');
+
+-- 5. Table-level grants. RLS policies only narrow access — they don't grant
+--    it in the first place. Without these, every query fails with
+--    "permission denied for table X", even if the RLS policy would allow it.
+grant select, update on settings to authenticated;
+grant select, insert, delete on expenses to authenticated;

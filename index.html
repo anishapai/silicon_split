@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>House-d 🪸</title>
+<title>The Ledger</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -46,7 +46,7 @@
 
   <!-- LOGIN VIEW -->
   <div id="loginView" class="card" style="padding:32px 24px; margin-top:80px; text-align:center;">
-    <p class="display" style="font-size:22px; font-weight:600; margin:0 0 6px;">House-d 🪸</p>
+    <p class="display" style="font-size:22px; font-weight:600; margin:0 0 6px;">The Ledger</p>
     <p class="muted" style="font-size:13px; margin:0 0 20px;">Sign in with your email to open the shared ledger.</p>
     <input id="emailInput" type="email" placeholder="you@example.com" style="margin-bottom:10px;" />
     <button class="btn-primary" style="width:100%;" onclick="sendMagicLink()">Send magic link</button>
@@ -57,7 +57,7 @@
   <div id="appView" class="hidden">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:28px;">
       <div>
-        <p class="muted mono" style="font-size:11px; letter-spacing:.15em; text-transform:uppercase; margin:0 0 4px;">House-d 🪸</p>
+        <p class="muted mono" style="font-size:11px; letter-spacing:.15em; text-transform:uppercase; margin:0 0 4px;">The Ledger</p>
         <h1 class="display" id="titleNames" style="font-size:28px; font-weight:600; margin:0;">Person A &amp; Person B</h1>
       </div>
       <div style="display:flex; gap:8px;">
@@ -104,6 +104,16 @@
           <button id="paidBbtn" class="toggle" onclick="setPaidBy('B')">Person B paid</button>
         </div>
       </div>
+      <select id="categorySelect" style="width:100%; margin-bottom:10px; border:1px solid var(--line); border-radius:8px; padding:10px 12px; background:#fff;">
+        <option value="Rent">Rent</option>
+        <option value="Utilities">Utilities</option>
+        <option value="Groceries">Groceries</option>
+        <option value="Dining">Dining</option>
+        <option value="Transport">Transport</option>
+        <option value="Household">Household</option>
+        <option value="Entertainment">Entertainment</option>
+        <option value="Other" selected>Other</option>
+      </select>
       <p id="customSplitToggle" class="muted" style="font-size:12px; cursor:pointer; text-decoration:underline;" onclick="showCustomSplit()">Adjust split for this expense</p>
       <div id="customSplitPanel" class="hidden" style="background:var(--paper); border-radius:8px; padding:10px; margin-bottom:10px;">
         <label class="muted mono" style="font-size:11px; display:flex; justify-content:space-between;">
@@ -114,6 +124,9 @@
       <p id="formError" class="mono" style="font-size:12px; color:var(--ochre);"></p>
       <button class="btn-primary" style="width:100%;" onclick="addExpense()">+ Add expense</button>
     </div>
+
+    <!-- CATEGORY BREAKDOWN -->
+    <div id="breakdown" style="margin-bottom:24px;"></div>
 
     <!-- HISTORY -->
     <h2 class="display" style="font-size:17px; font-weight:600; margin:0 0 12px;">History</h2>
@@ -126,8 +139,8 @@
 
 <script>
 // ====== CONFIGURE THESE TWO VALUES (see README) ======
-const SUPABASE_URL = "https://mlepcdqwhflaciryhilj.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_AQ8yW9UaIOAFlHCZZ30yCg_ehvDiZKp";
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 // =======================================================
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -136,6 +149,12 @@ let settings = { name_a: "Person A", name_b: "Person B", split_a: 60 };
 let expenses = [];
 let paidBy = "A";
 let customSplit = false;
+
+const CATEGORY_COLORS = {
+  Rent: "#3B6E71", Utilities: "#5B8A8D", Groceries: "#7A9E5E",
+  Dining: "#B5652D", Transport: "#8C6A9C", Household: "#B58A2D",
+  Entertainment: "#C44E5E", Other: "#7C8B85"
+};
 
 function fmt(n) {
   return Number(n).toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -208,10 +227,12 @@ async function addExpense() {
   if (!description || !amount || amount <= 0) { errEl.textContent = "Add a description and an amount above zero."; return; }
   errEl.textContent = "";
   const split_a = customSplit ? Number(document.getElementById("expenseSplitRange").value) : settings.split_a;
-  const { error } = await sb.from("expenses").insert({ description, amount, paid_by: paidBy, split_a });
+  const category = document.getElementById("categorySelect").value;
+  const { error } = await sb.from("expenses").insert({ description, amount, paid_by: paidBy, split_a, category });
   if (error) { errEl.textContent = "Couldn't save: " + error.message; return; }
   document.getElementById("descInput").value = "";
   document.getElementById("amountInput").value = "";
+  document.getElementById("categorySelect").value = "Other";
   customSplit = false;
   document.getElementById("customSplitPanel").classList.add("hidden");
   document.getElementById("customSplitToggle").classList.remove("hidden");
@@ -261,6 +282,30 @@ function render() {
   const tilt = total === 0 ? 0 : Math.max(-14, Math.min(14, (net / (total || 1)) * 40));
   document.getElementById("scale").style.transform = `rotate(${tilt}deg)`;
 
+  const breakdownEl = document.getElementById("breakdown");
+  if (expenses.length === 0) { breakdownEl.innerHTML = ""; }
+  else {
+    const byCat = {};
+    for (const e of expenses) byCat[e.category] = (byCat[e.category] || 0) + Number(e.amount);
+    const sorted = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+    breakdownEl.innerHTML = `
+      <h2 class="display" style="font-size:17px; font-weight:600; margin:0 0 10px;">By category</h2>
+      <div class="card" style="padding:14px 16px; display:flex; flex-direction:column; gap:8px;">
+        ${sorted.map(([cat, amt]) => {
+          const pct = total > 0 ? (amt / total) * 100 : 0;
+          const color = CATEGORY_COLORS[cat] || CATEGORY_COLORS.Other;
+          return `<div>
+            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:3px;">
+              <span>${cat}</span><span class="mono muted">${fmt(amt)}</span>
+            </div>
+            <div style="background:var(--paper); border-radius:999px; height:6px; overflow:hidden;">
+              <div style="background:${color}; width:${pct}%; height:100%;"></div>
+            </div>
+          </div>`;
+        }).join("")}
+      </div>`;
+  }
+
   const list = document.getElementById("expenseList");
   const empty = document.getElementById("emptyState");
   if (expenses.length === 0) { empty.classList.remove("hidden"); list.classList.add("hidden"); return; }
@@ -271,11 +316,13 @@ function render() {
     const isDefault = e.split_a === settings.split_a;
     const color = e.paid_by === "A" ? "var(--teal)" : "var(--ochre)";
     const payer = e.paid_by === "A" ? settings.name_a : settings.name_b;
+    const catColor = CATEGORY_COLORS[e.category] || CATEGORY_COLORS.Other;
     return `<div class="row">
       <div class="dot" style="background:${color}"></div>
       <div style="flex:1; min-width:0;">
-        <p style="margin:0; font-size:14px; font-weight:500;">${escapeHtml(e.description)}</p>
+        <p style="margin:0 0 3px; font-size:14px; font-weight:500;">${escapeHtml(e.description)}</p>
         <p class="mono muted" style="margin:0; font-size:11px;">${payer} paid · ${isDefault ? "default split" : e.split_a + "/" + (100 - e.split_a)}</p>
+        <span class="mono" style="display:inline-block; margin-top:4px; font-size:10px; padding:2px 7px; border-radius:999px; background:${catColor}22; color:${catColor};">${e.category}</span>
       </div>
       <div style="text-align:right;">
         <p class="mono" style="margin:0; font-size:14px; font-weight:600;">${fmt(e.amount)}</p>
