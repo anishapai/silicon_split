@@ -1,0 +1,20 @@
+name: Keep Supabase awake
+
+# Runs a real database query on a schedule so the free-tier Supabase
+# project never sits idle for 7 days and gets auto-paused.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"   # every day at 06:17 UTC (~11:47am IST)
+  workflow_dispatch:        # lets you trigger it manually from the Actions tab, for testing
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query the settings table
+        run: |
+          curl -fsS \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/settings?select=id"
