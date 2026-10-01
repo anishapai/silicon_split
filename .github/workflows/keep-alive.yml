@@ -14,7 +14,13 @@ jobs:
     steps:
       - name: Query the settings table
         run: |
-          curl -fsS \
+          http_status=$(curl -sS -o response.txt -w "%{http_code}" \
             -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
-            "${{ secrets.SUPABASE_URL }}/rest/v1/settings?select=id"
+            "${{ secrets.SUPABASE_URL }}/rest/v1/settings?select=id")
+          echo "HTTP status: $http_status"
+          echo "Response body:"
+          cat response.txt
+          if [ "$http_status" -ge 400 ]; then
+            exit 1
+          fi
